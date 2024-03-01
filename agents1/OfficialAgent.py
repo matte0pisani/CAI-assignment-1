@@ -394,7 +394,7 @@ class BaselineAgent(ArtificialBrain):
                                 self._answered = True
                             # Tell the human to come over and be idle untill human arrives
                             if not state[{'is_human_agent': True}]:
-                                self._send_message('Please come to ' + str(self._door['room_name']) + ' to remove rock.',
+                                self._send_message('Please come to ' + str(self._door['room_name']) + ' to remove rock together.',
                                                   'RescueBot')
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
@@ -940,18 +940,19 @@ class BaselineAgent(ArtificialBrain):
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
-        # Update the trust value based on for example the received messages
-        for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
-            if 'Collect' in message:
-                trustBeliefs[self._human_name]['competence'] += 0.10
-                # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
-                                                                       1)
+        # # Update the trust value based on for example the received messages
+        # for message in receivedMessages:
+        #     # Increase agent trust in a team member that rescued a victim
+        #     if 'Collect' in message:
+        #         trustBeliefs[self._human_name]['competence'] += 0.10
+        #         # Restrict the competence belief to a range of -1 to 1
+        #         trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
+        #                                                                1)
 
-        for message in self._send_messages:
-            # print(message)
-            if 'Lets remove' in message and Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
+        # When human remove an obstacle with the robot, his competence increases
+        if len(self._send_messages) > 0:
+            last = self._send_messages[-1]
+            if ('Lets remove' in last or ('remove' in last and 'together' in last)) and Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
                 trustBeliefs[self._human_name]['competence'] += 0.10
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
@@ -959,6 +960,7 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name', 'competence', 'willingness'])
+            print('scrivo', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
             csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
                                  trustBeliefs[self._human_name]['willingness']])
 
