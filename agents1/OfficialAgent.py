@@ -144,6 +144,7 @@ class BaselineAgent(ArtificialBrain):
                 self._carrying_together = False
         # If carrying a victim together, let agent be idle (because joint actions are essentially carried out by the human)
         if self._carrying_together == True:
+            self._waiting = False
             return None, {}
 
         # Send the hidden score message for displaying and logging the score during the task, DO NOT REMOVE THIS
@@ -166,6 +167,7 @@ class BaselineAgent(ArtificialBrain):
             if Phase.FIND_NEXT_GOAL == self._phase:
                 # Definition of some relevant variables
                 self._answered = False
+                self._waiting = False # maybe useless, check and remove
                 self._goal_vic = None
                 self._goal_loc = None
                 self._rescue = None
@@ -948,7 +950,7 @@ class BaselineAgent(ArtificialBrain):
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
         # print(self._phase)
-        print(self._tick)
+        # print(self._tick)
 
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
@@ -989,7 +991,7 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name', 'competence', 'willingness'])
-            print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
+            # print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
             csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
                                  trustBeliefs[self._human_name]['willingness']])
 
