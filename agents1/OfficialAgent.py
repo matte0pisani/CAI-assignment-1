@@ -949,12 +949,20 @@ class BaselineAgent(ArtificialBrain):
         #         trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
         #                                                                1)
 
-        # When human remove an obstacle with the robot, his competence increases
-        if len(self._send_messages) > 0:
+        if len(self._send_messages) > 1:
             last = self._send_messages[-1]
+            second_last = self._send_messages[-2]
+            # When human remove an obstacle with the robot, his competence increases
             if ('Lets remove' in last or ('remove' in last and 'together' in last)) and Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
                 trustBeliefs[self._human_name]['competence'] += 0.10
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+
+            # When human carries a victim with the robot, his competence increases
+            if ('Lets carry' in second_last or ('carry' in second_last and 'together' in second_last) 
+                or ('because you told me' in second_last)) and Phase.FOLLOW_PATH_TO_ROOM == self._phase:
+                trustBeliefs[self._human_name]['competence'] += 0.10
+                trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
