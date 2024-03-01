@@ -42,7 +42,7 @@ class BaselineAgent(ArtificialBrain):
     def __init__(self, slowdown, condition, name, folder):
         super().__init__(slowdown, condition, name, folder)
         # Initialization of some relevant variables
-        self._tick = None
+        self._tick = 0
         self._slowdown = slowdown
         self._condition = condition
         self._human_name = name
@@ -100,6 +100,14 @@ class BaselineAgent(ArtificialBrain):
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._team_members, self._folder)
         self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
+
+        # Increase the number of ticks each round (for now, only in case the robot is waiting, to
+        # measure responsiveness of human)
+        print(self._waiting)
+        if self._waiting:
+            self._tick += 1
+        else:
+            self._tick = 0
 
         # Check whether human is close in distance
         if state[{'is_human_agent': True}]:
@@ -396,11 +404,13 @@ class BaselineAgent(ArtificialBrain):
                             if not state[{'is_human_agent': True}]:
                                 self._send_message('Please come to ' + str(self._door['room_name']) + ' to remove rock together.',
                                                   'RescueBot')
+                                self._waiting = True # this for responsiveness
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._send_message('Lets remove rock blocking ' + str(self._door['room_name']) + '!',
                                                   'RescueBot')
+                                self._waiting = True # this for responsiveness
                                 return None, {}
                         # Remain idle untill the human communicates what to do with the identified obstacle 
                         else:
@@ -483,11 +493,13 @@ class BaselineAgent(ArtificialBrain):
                                 self._send_message(
                                     'Please come to ' + str(self._door['room_name']) + ' to remove stones together.',
                                     'RescueBot')
+                                self._waiting = True # this for responsiveness
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._send_message('Lets remove stones blocking ' + str(self._door['room_name']) + '!',
                                                   'RescueBot')
+                                self._waiting = True # this for responsiveness
                                 return None, {}
                         # Remain idle until the human communicates what to do with the identified obstacle
                         else:
@@ -936,6 +948,7 @@ class BaselineAgent(ArtificialBrain):
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
         # print(self._phase)
+        print(self._tick)
 
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
@@ -949,10 +962,18 @@ class BaselineAgent(ArtificialBrain):
         #         trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
         #                                                                1)
 
+        # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
+        # So we decrement willingness, linearly with the time of wait
+        if self._tick > 300:
+            alpha = self._tick // 100
+            trustBeliefs[self._human_name]['willingness'] -= 0.05 * alpha/3 * trustBeliefs[self._human_name]['willingness']
+            trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
+
+
         if len(self._send_messages) > 1:
             last = self._send_messages[-1]
             second_last = self._send_messages[-2]
-            # When human remove an obstacle with the robot, his competence increases
+            # When human removes an obstacle with the robot, his competence increases
             if ('Lets remove' in last or ('remove' in last and 'together' in last)) and Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
                 trustBeliefs[self._human_name]['competence'] += 0.10
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
@@ -968,7 +989,7 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name', 'competence', 'willingness'])
-            print('scrivo', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
+            print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
             csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
                                  trustBeliefs[self._human_name]['willingness']])
 
