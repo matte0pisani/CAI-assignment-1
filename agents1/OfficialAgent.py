@@ -95,12 +95,13 @@ class BaselineAgent(ArtificialBrain):
             for member in self._team_members:
                 if mssg.from_id == member and mssg.content not in self._received_messages:
                     self._received_messages.append(mssg.content)
-        # Process messages from team members
-        self._process_messages(state, self._team_members, self._condition)
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._team_members, self._folder)
-        self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
+        trustBeliefs = self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
 
+        # Process messages from team members
+        self._process_messages(state, self._team_members, self._condition, trustBeliefs)
+        
         # Increase the number of ticks each round (for now, only in case the robot is waiting, to
         # measure responsiveness of human)
         print(self._waiting)
@@ -817,7 +818,24 @@ class BaselineAgent(ArtificialBrain):
                 zones.append(place)
         return zones
 
-    def _process_messages(self, state, teamMembers, condition):
+    def _gamble(self, member, trustBeliefs, trustType):
+        '''
+        Return true with probability proportional to the competence of the team members
+        '''
+        belief = trustBeliefs[member][trustType]
+        # Return false below a threshold
+        if belief <= -0.5:
+            return False
+        # Return true above a threshold
+        elif belief >= 0.5:
+            return True
+        
+        # Return true with probability linearly increasing with the belief
+        return random.random() < (belief + 0.5) / 1.5
+        
+        
+    
+    def _process_messages(self, state, teamMembers, condition, trustBeliefs):
         '''
         process incoming messages received from the team members
         '''
@@ -831,59 +849,66 @@ class BaselineAgent(ArtificialBrain):
                 if mssg.from_id == member:
                     receivedMessages[member].append(mssg.content)
         # Check the content of the received messages
-        for mssgs in receivedMessages.values():
+        for member, mssgs in receivedMessages.items():
             for msg in mssgs:
                 # If a received message involves team members searching areas, add these areas to the memory of areas that have been explored
                 if msg.startswith("Search:"):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._searched_rooms:
-                        self._searched_rooms.append(area)
+                        # Add the area with probability proportional to the member's competence
+                        if self._gamble(member, trustBeliefs, 'competence'):
+                            self._searched_rooms.append(area)
+                            
                 # If a received message involves team members finding victims, add these victims and their locations to memory
                 if msg.startswith("Found:"):
-                    # Identify which victim and area it concerns
-                    if len(msg.split()) == 6:
-                        foundVic = ' '.join(msg.split()[1:4])
-                    else:
-                        foundVic = ' '.join(msg.split()[1:5])
-                    loc = 'area ' + msg.split()[-1]
-                    # Add the area to the memory of searched areas
-                    if loc not in self._searched_rooms:
-                        self._searched_rooms.append(loc)
-                    # Add the victim and its location to memory
-                    if foundVic not in self._found_victims:
-                        self._found_victims.append(foundVic)
-                        self._found_victim_logs[foundVic] = {'room': loc}
-                    if foundVic in self._found_victims and self._found_victim_logs[foundVic]['room'] != loc:
-                        self._found_victim_logs[foundVic] = {'room': loc}
-                    # Decide to help the human carry a found victim when the human's condition is 'weak'
-                    if condition == 'weak':
-                        self._rescue = 'together'
-                    # Add the found victim to the to do list when the human's condition is not 'weak'
-                    if 'mild' in foundVic and condition != 'weak':
-                        self._todo.append(foundVic)
+                    # Trust the human message with probability proportional to the member's competence
+                    if self._gamble(member, trustBeliefs, 'competence'):
+                        # Identify which victim and area it concerns
+                        if len(msg.split()) == 6:
+                            foundVic = ' '.join(msg.split()[1:4])
+                        else:
+                            foundVic = ' '.join(msg.split()[1:5])
+                        loc = 'area ' + msg.split()[-1]
+                        # Add the area to the memory of searched areas
+                        if loc not in self._searched_rooms:
+                            self._searched_rooms.append(loc)
+                        # Add the victim and its location to memory
+                        if foundVic not in self._found_victims:
+                            self._found_victims.append(foundVic)
+                            self._found_victim_logs[foundVic] = {'room': loc}
+                        if foundVic in self._found_victims and self._found_victim_logs[foundVic]['room'] != loc:
+                            self._found_victim_logs[foundVic] = {'room': loc}
+                        # Decide to help the human carry a found victim when the human's condition is 'weak'
+                        if condition == 'weak':
+                            self._rescue = 'together'
+                        # Add the found victim to the to do list when the human's condition is not 'weak'
+                        if 'mild' in foundVic and condition != 'weak':
+                            self._todo.append(foundVic)
                 # If a received message involves team members rescuing victims, add these victims and their locations to memory
                 if msg.startswith('Collect:'):
-                    # Identify which victim and area it concerns
-                    if len(msg.split()) == 6:
-                        collectVic = ' '.join(msg.split()[1:4])
-                    else:
-                        collectVic = ' '.join(msg.split()[1:5])
-                    loc = 'area ' + msg.split()[-1]
-                    # Add the area to the memory of searched areas
-                    if loc not in self._searched_rooms:
-                        self._searched_rooms.append(loc)
-                    # Add the victim and location to the memory of found victims
-                    if collectVic not in self._found_victims:
-                        self._found_victims.append(collectVic)
-                        self._found_victim_logs[collectVic] = {'room': loc}
-                    if collectVic in self._found_victims and self._found_victim_logs[collectVic]['room'] != loc:
-                        self._found_victim_logs[collectVic] = {'room': loc}
-                    # Add the victim to the memory of rescued victims when the human's condition is not weak
-                    if condition != 'weak' and collectVic not in self._collected_victims:
-                        self._collected_victims.append(collectVic)
-                    # Decide to help the human carry the victim together when the human's condition is weak
-                    if condition == 'weak':
-                        self._rescue = 'together'
+                    # Trust the human message with probability proportional to the member's competence
+                    if self._gamble(member, trustBeliefs, 'competence'):
+                        # Identify which victim and area it concerns
+                        if len(msg.split()) == 6:
+                            collectVic = ' '.join(msg.split()[1:4])
+                        else:
+                            collectVic = ' '.join(msg.split()[1:5])
+                        loc = 'area ' + msg.split()[-1]
+                        # Add the area to the memory of searched areas
+                        if loc not in self._searched_rooms:
+                            self._searched_rooms.append(loc)
+                        # Add the victim and location to the memory of found victims
+                        if collectVic not in self._found_victims:
+                            self._found_victims.append(collectVic)
+                            self._found_victim_logs[collectVic] = {'room': loc}
+                        if collectVic in self._found_victims and self._found_victim_logs[collectVic]['room'] != loc:
+                            self._found_victim_logs[collectVic] = {'room': loc}
+                        # Add the victim to the memory of rescued victims when the human's condition is not weak
+                        if condition != 'weak' and collectVic not in self._collected_victims:
+                            self._collected_victims.append(collectVic)
+                        # Decide to help the human carry the victim together when the human's condition is weak
+                        if condition == 'weak':
+                            self._rescue = 'together'
                 # If a received message involves team members asking for help with removing obstacles, add their location to memory and come over
                 if msg.startswith('Remove:'):
                     # Come over immediately when the agent is not carrying a victim
