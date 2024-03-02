@@ -381,6 +381,14 @@ class BaselineAgent(ArtificialBrain):
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'rock' in info[
                         'obj_id']:
                         objects.append(info)
+                        
+                        # Wait less if the human is not willing to
+                        if self._answered = True and self._waiting = True:
+                            if self._ticks > 60 and not self._door['room_name'] in self._to_search and trustBeliefs[self._human_name]['willingness'] < -0.8:               
+                                self._waiting = False
+                                self._to_search.append(self._door['room_name'])
+                                self._phase = Phase.FIND_NEXT_GOAL 
+                        
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
                             self._send_message('Found rock blocking ' + str(self._door['room_name']) + '. Please decide whether to "Remove" or "Continue" searching. \n \n \
@@ -422,43 +430,61 @@ class BaselineAgent(ArtificialBrain):
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'tree' in info[
                         'obj_id']:
                         objects.append(info)
+                        
                         # Communicate which obstacle is blocking the entrance
-                        if self._answered == False and not self._remove and not self._waiting:
-                            self._send_message('Found tree blocking  ' + str(self._door['room_name']) + '. Please decide whether to "Remove" or "Continue" searching. \n \n \
-                                Important features to consider are: \n safe - victims rescued: ' + str(
-                                self._collected_victims) + '\n explore - areas searched: area ' + str(
-                                self._searched_rooms).replace('area ', '') + ' \
-                                \n clock - removal time: 10 seconds', 'RescueBot')
-                            self._waiting = True
-                        # Determine the next area to explore if the human tells the agent not to remove the obstacle
-                        if self.received_messages_content and self.received_messages_content[
-                            -1] == 'Continue' and not self._remove:
-                            self._answered = True
-                            self._waiting = False
-                            # Add area to the to do list
-                            self._to_search.append(self._door['room_name'])
-                            self._phase = Phase.FIND_NEXT_GOAL
-                        # Remove the obstacle if the human tells the agent to do so
-                        if self.received_messages_content and self.received_messages_content[
-                            -1] == 'Remove' or self._remove:
-                            if not self._remove:
-                                self._answered = True
-                                self._waiting = False
-                                self._send_message('Removing tree blocking ' + str(self._door['room_name']) + '.',
+                        # Tree can only be removed by the robot, start removing immediately
+                        
+                        self._send_message('Removing tree blocking ' + str(self._door['room_name']) + '.',
                                                   'RescueBot')
-                            if self._remove:
-                                self._send_message('Removing tree blocking ' + str(
-                                    self._door['room_name']) + ' because you asked me to.', 'RescueBot')
-                            self._phase = Phase.ENTER_ROOM
-                            self._remove = False
-                            return RemoveObject.__name__, {'object_id': info['obj_id']}
-                        # Remain idle untill the human communicates what to do with the identified obstacle
-                        else:
-                            return None, {}
+                        self._phase = Phase.ENTER_ROOM
+                        self._remove = False
+                        return RemoveObject.__name__, {'object_id': info['obj_id']}
+                        
+                        # if self._answered == False and not self._remove and not self._waiting:
+                        #     self._send_message('Found tree blocking  ' + str(self._door['room_name']) + '. Please decide whether to "Remove" or "Continue" searching. \n \n \
+                        #         Important features to consider are: \n safe - victims rescued: ' + str(
+                        #         self._collected_victims) + '\n explore - areas searched: area ' + str(
+                        #         self._searched_rooms).replace('area ', '') + ' \
+                        #         \n clock - removal time: 10 seconds', 'RescueBot')
+                        #     self._waiting = True
+                        # # Determine the next area to explore if the human tells the agent not to remove the obstacle
+                        # if self.received_messages_content and self.received_messages_content[
+                        #     -1] == 'Continue' and not self._remove:
+                        #     self._answered = True
+                        #     self._waiting = False
+                        #     # Add area to the to do list
+                        #     self._to_search.append(self._door['room_name'])
+                        #     self._phase = Phase.FIND_NEXT_GOAL
+                        # # Remove the obstacle if the human tells the agent to do so
+                        # if self.received_messages_content and self.received_messages_content[
+                        #     -1] == 'Remove' or self._remove:
+                        #     if not self._remove:
+                        #         self._answered = True
+                        #         self._waiting = False
+                        #         self._send_message('Removing tree blocking ' + str(self._door['room_name']) + '.',
+                        #                           'RescueBot')
+                        #     if self._remove:
+                        #         self._send_message('Removing tree blocking ' + str(
+                        #             self._door['room_name']) + ' because you asked me to.', 'RescueBot')
+                        #     self._phase = Phase.ENTER_ROOM
+                        #     self._remove = False
+                        #     return RemoveObject.__name__, {'object_id': info['obj_id']}
+                        # # Remain idle untill the human communicates what to do with the identified obstacle
+                        # else:
+                        #     return None, {}
 
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'stone' in \
                             info['obj_id']:
                         objects.append(info)
+                        
+                        # If the human is not willing, wait less and remove alone
+                        if self._answered = True and self._waiting = True:
+                            if self._ticks > 60 and trustBeliefs[self._human_name]['willingness'] < -0.8:
+                                self._waiting = False
+                                self._phase = Phase.ENTER_ROOM
+                                self._remove = False
+                                return RemoveObject.__name__, {'object_id': info['obj_id']}
+                        
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
                             self._send_message('Found stones blocking  ' + str(self._door['room_name']) + '. Please decide whether to "Remove together", "Remove alone", or "Continue" searching. \n \n \
@@ -822,16 +848,19 @@ class BaselineAgent(ArtificialBrain):
         '''
         Return true with probability proportional to the competence of the team members
         '''
+        CEIL = 0.8
+        FLOOR = -0.8
+        
         belief = trustBeliefs[member][trustType]
         # Return false below a threshold
-        if belief <= -0.5:
+        if belief <= FLOOR:
             return False
         # Return true above a threshold
-        elif belief >= 0.5:
+        elif belief >= CEIL:
             return True
         
         # Return true with probability linearly increasing with the belief
-        return random.random() < (belief + 0.5) / 1.5
+        return random.random() < (belief + FLOOR) / (CEIL - FLOOR)
         
         
     
