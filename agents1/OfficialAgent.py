@@ -1,4 +1,4 @@
-import sys, random, enum, ast, time, csv
+import sys, random, enum, ast, time, csv, glob, os
 import numpy as np
 from matrx import grid_world
 from brains1.ArtificialBrain import ArtificialBrain
@@ -36,6 +36,38 @@ class Phase(enum.Enum):
     FIX_ORDER_DROP = 17,
     REMOVE_OBSTACLE_IF_NEEDED = 18,
     ENTER_ROOM = 19
+
+
+def get_total_ticks_and_scores():
+    fld = os.getcwd()
+    recent_dir = max(glob.glob(os.path.join(fld, '*/')), key=os.path.getmtime)
+    recent_dir = max(glob.glob(os.path.join(recent_dir, '*/')), key=os.path.getmtime)
+    action_file = glob.glob(os.path.join(recent_dir,'world_1/action*'))[0]
+    action_header = []
+    action_contents=[]  
+    unique_agent_actions = []
+    unique_human_actions = []
+
+    with open(action_file) as csvfile:
+        reader = csv.reader(csvfile, delimiter=';', quotechar="'")
+        for row in reader:
+            if action_header==[]:
+                action_header=row
+                continue
+            if row[2:4] not in unique_agent_actions and row[2]!="":
+                unique_agent_actions.append(row[2:4])
+            if row[4:6] not in unique_human_actions and row[4]!="":
+                unique_human_actions.append(row[4:6])
+            if row[4] == 'RemoveObjectTogether' or row[4] == 'CarryObjectTogether' or row[4] == 'DropObjectTogether':
+                if row[4:6] not in unique_agent_actions:
+                    unique_agent_actions.append(row[4:6])
+            res = {action_header[i]: row[i] for i in range(len(action_header))}
+            action_contents.append(res)
+
+    no_ticks = action_contents[-1]['tick_nr']
+    score = action_contents[-1]['score']
+    completeness = action_contents[-1]['completeness']
+    return no_ticks, score, completeness
 
 
 class BaselineAgent(ArtificialBrain):
@@ -974,6 +1006,17 @@ class BaselineAgent(ArtificialBrain):
             trustBeliefs[self._human_name]['willingness'] -= 0.25 * alpha/3 * (1-trustBeliefs[self._human_name]['confidence'])
             trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
+        # Total score: if the team has reached a good completeness level after not much time, this is symptomatic of the competence
+        # of the human (indifferently from his willingness, with his actions the task is getting done)
+        # In particular, we consider the situation where the human does half of the work in less than 2500 ticks.
+        ticks, score, completeness = get_total_ticks_and_scores()
+        if float(completeness) > 0.5 and int(ticks) < 2500:
+            trustBeliefs[self._human_name]['confidence'] += 0.10
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
+            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+
         # HERE WE HAVE UPDATE PROBLEM
         if len(self._send_messages) > 1:
             last = self._send_messages[-1]
@@ -1009,7 +1052,7 @@ class BaselineAgent(ArtificialBrain):
                                  trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'] ])
 
         return trustBeliefs
-
+    
     def _send_message(self, mssg, sender):
         '''
         send messages from agent to other team members
