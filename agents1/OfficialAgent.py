@@ -1009,12 +1009,34 @@ class BaselineAgent(ArtificialBrain):
         # Total score: if the team has reached a good completeness level after not much time, this is symptomatic of the competence
         # of the human (indifferently from his willingness, with his actions the task is getting done)
         # In particular, we consider the situation where the human does half of the work in less than 2500 ticks.
+        # If in the same amount of time the human can't do a fourth of the work, then competence decreases.
         ticks, score, completeness = get_total_ticks_and_scores()
-        if float(completeness) > 0.5 and int(ticks) < 2500:
+        if float(completeness) >= 0.5 and int(ticks) < 2500:
+            trustBeliefs[self._human_name]['confidence'] += 0.1
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.3
+            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        elif float(completeness) <= 0.25 and int(ticks) >= 2500:
+            trustBeliefs[self._human_name]['confidence'] -= 0.10
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.3
+            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+
+        if float(completeness) == 1.0 and int(ticks) < 6000:
             trustBeliefs[self._human_name]['confidence'] += 0.10
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.4
+            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        elif float(completeness) <= 0.5 and int(ticks) >= 6000:
+            trustBeliefs[self._human_name]['confidence'] -= 0.10
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
+            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
-            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
+        if float(completeness) == 1.0 and int(ticks) >= 10000:
+            trustBeliefs[self._human_name]['confidence'] -= 0.10
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
         # HERE WE HAVE UPDATE PROBLEM
