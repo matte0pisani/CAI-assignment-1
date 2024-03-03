@@ -103,7 +103,7 @@ class BaselineAgent(ArtificialBrain):
 
         # Increase the number of ticks each round (for now, only in case the robot is waiting, to
         # measure responsiveness of human)
-        print(self._waiting)
+        # print(self._waiting)
         if self._waiting:
             self._tick += 1
         else:
@@ -925,7 +925,8 @@ class BaselineAgent(ArtificialBrain):
         # Create a dictionary with trust values for all team members
         trustBeliefs = {}
         # Set a default starting trust value
-        default = 0.5
+        default = 0
+        default_conf = 0.5
         trustfile_header = []
         trustfile_contents = []
         # Check if agent already collaborated with this human before, if yes: load the corresponding trust values, if no: initialize using default trust values
@@ -940,12 +941,16 @@ class BaselineAgent(ArtificialBrain):
                     name = row[0]
                     competence = float(row[1])
                     willingness = float(row[2])
-                    trustBeliefs[name] = {'competence': competence, 'willingness': willingness}
+                    confidence = float(row[3])
+                    trustBeliefs[name] = {'competence': competence, 'willingness': willingness, 
+                                          'confidence': confidence}
                 # Initialize default trust values
                 if row and row[0] != self._human_name:
                     competence = default
                     willingness = default
-                    trustBeliefs[self._human_name] = {'competence': competence, 'willingness': willingness}
+                    confidence = default_conf
+                    trustBeliefs[self._human_name] = {'competence': competence, 'willingness': willingness, 
+                                                      'confidence': confidence}
         return trustBeliefs
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
@@ -955,45 +960,53 @@ class BaselineAgent(ArtificialBrain):
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
-        # # Update the trust value based on for example the received messages
-        # for message in receivedMessages:
-        #     # Increase agent trust in a team member that rescued a victim
-        #     if 'Collect' in message:
-        #         trustBeliefs[self._human_name]['competence'] += 0.10
-        #         # Restrict the competence belief to a range of -1 to 1
-        #         trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
-        #                                                                1)
 
         # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         if self._tick > 300:
             alpha = self._tick // 100
-            trustBeliefs[self._human_name]['willingness'] -= 0.05 * alpha/3 * trustBeliefs[self._human_name]['willingness']
+
+            # Confidence update: the more RescueRobot waits, the more his confidence towards bad actions grows (meaning
+            # the confidence value shrinks to 0)
+            trustBeliefs[self._human_name]['confidence'] -= 0.05 * alpha/3
+            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+            trustBeliefs[self._human_name]['willingness'] -= 0.25 * alpha/3 * (1-trustBeliefs[self._human_name]['confidence'])
             trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
-
+        # HERE WE HAVE UPDATE PROBLEM
         if len(self._send_messages) > 1:
             last = self._send_messages[-1]
             second_last = self._send_messages[-2]
             # When human removes an obstacle with the robot, his competence increases
             if ('Lets remove' in last or ('remove' in last and 'together' in last)) and Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
-                trustBeliefs[self._human_name]['competence'] += 0.10
+
+                # Confidence update: the more RescueRobot gets help, the more his confidence towards good actions grows (meaning
+                # the confidence value grows to 1)
+                trustBeliefs[self._human_name]['confidence'] += 0.10
+                trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
             # When human carries a victim with the robot, his competence increases
             if ('Lets carry' in second_last or ('carry' in second_last and 'together' in second_last) 
                 or ('because you told me' in second_last)) and Phase.FOLLOW_PATH_TO_ROOM == self._phase:
-                trustBeliefs[self._human_name]['competence'] += 0.10
+                trustBeliefs[self._human_name]['confidence'] += 0.10
+                trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], -1, 1)
+
+                trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['name', 'competence', 'willingness'])
-            # print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'])
+            csv_writer.writerow(['name', 'competence', 'willingness', 'confidence'])
+            print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'],
+                  trustBeliefs[self._human_name]['confidence'])
             csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
-                                 trustBeliefs[self._human_name]['willingness']])
+                                 trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'] ])
 
         return trustBeliefs
 
