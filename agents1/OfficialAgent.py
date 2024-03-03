@@ -993,7 +993,40 @@ class BaselineAgent(ArtificialBrain):
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
 
-        # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
+        # Update the trust value based on for example the received messages
+        for message in receivedMessages:
+            # Increase agent trust in a team member that rescued a victim
+            if 'Collect' in message:
+                trustBeliefs[self._human_name]['competence'] += 0.10
+
+            if "Search:" in message:
+                location = "area " + message[8:]
+                if location in self._searched_rooms:
+                    trustBeliefs[self._human_name]['willingness'] -= 0.10
+                else:
+                    trustBeliefs[self._human_name]['willingness'] += 0.10
+
+            if "Continue" in message:
+                if self._recent_vic is not None:
+                    if "critical" in self._recent_vic:
+                        trustBeliefs[self._human_name]['willingness'] -= 0.20
+                    else:
+                        trustBeliefs[self._human_name]['willingness'] -= 0.10
+                else:
+                    trustBeliefs[self._human_name]['willingness'] -= 0.05
+
+            if "Remove" in message:
+                if "together" in message:
+                    trustBeliefs[self._human_name]['willingness'] += 0.10
+                    trustBeliefs[self._human_name]['competence'] += 0.10
+                else:
+                    if "alone" in message:
+                        trustBeliefs[self._human_name]['willingness'] -= 0.10
+
+        trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
+
+            # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         if self._tick > 300:
             alpha = self._tick // 100
