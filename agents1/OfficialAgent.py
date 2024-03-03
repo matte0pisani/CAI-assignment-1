@@ -105,6 +105,7 @@ class BaselineAgent(ArtificialBrain):
         self._recent_vic = None
         self._received_messages = []
         self._moving = False
+        self._lie_detected = False
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -988,49 +989,95 @@ class BaselineAgent(ArtificialBrain):
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
         # print(self._phase)
         # print(self._tick)
+        # print('all victims', self._collected_victims)
+        print('found victims', self._found_victim_logs)
 
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
 
-        # Update the trust value based on for example the received messages
         for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
-            if 'Collect' in message:
-                trustBeliefs[self._human_name]['competence'] += 0.10
 
-            if "Search:" in message:
-                location = "area " + message[8:]
-                if location in self._searched_rooms:
-                    trustBeliefs[self._human_name]['willingness'] -= 0.10
+            # Increase agent trust in a team member that rescued a victim, if the information he provides 
+            # is coherent with the past information the robot knows about (direct experience of inconsistency).
+            if 'Collect:' in message:
+                # Identify which victim and area it concerns
+                if len(message.split()) == 6:
+                    collectVic = ' '.join(message.split()[1:4])
                 else:
-                    trustBeliefs[self._human_name]['willingness'] += 0.10
-
-            if "Continue" in message:
-                if self._recent_vic is not None:
-                    if "critical" in self._recent_vic:
-                        trustBeliefs[self._human_name]['willingness'] -= 0.20
-                    else:
-                        trustBeliefs[self._human_name]['willingness'] -= 0.10
+                    collectVic = ' '.join(message.split()[1:5])
+                loc = 'area ' + message.split()[-1]
+                print(collectVic, loc)
+                past_victims = self._collected_victims[:-1]
+                # print('past victims', past_victims)
+                # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
+                # either he's lied before (if not a lie, it's a blunder anyway).
+                # Known bug: if you send a Collect message concerning the last rescued victim, it counts it as
+                # a new rescued victim.
+                if collectVic in past_victims:
+                    print('caso 1')
+                    trustBeliefs[self._human_name]['confidence'] -= 0.10
+                    trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-trustBeliefs[self._human_name]['confidence'])
+                # If the victim was already found, but in another room, there's some inconsistency.
+                # Having location and obj_field empty happens because of a Collect message which resulted in updating
+                # the room and removing the rest, meaning there was some non-coherent message with the human.
+                elif collectVic in self._found_victims and 'obj_id' not in self._found_victim_logs[collectVic].keys() and 'location' not in self._found_victim_logs[collectVic].keys():
+                    print('caso 2')
+                    trustBeliefs[self._human_name]['confidence'] -= 0.10
+                    trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-trustBeliefs[self._human_name]['confidence'])
+                # Otherwise, the robot will assume the human has not been lying, and increases its trust values (especially
+                # competence). However, if it's a lie the robot will find this and the punishment will be higher than this
+                # reward. Notice how the confidence value doesn't change here.
                 else:
-                    trustBeliefs[self._human_name]['willingness'] -= 0.05
+                    print('caso 3')
+                    trustBeliefs[self._human_name]['competence'] += 0.2 * trustBeliefs[self._human_name]['confidence']
+                    trustBeliefs[self._human_name]['competence'] += 0.1 * trustBeliefs[self._human_name]['confidence']
+               
+            # If the human communicates where he goes, the robot appreciates that as it help him do 
+            # its job at best
+            # NEEDS THE DOUBLE CHECK
+            # CHECK ALSO IF REALLY NEEDED OR MAYBE TOO MUCH
+            # if "Search:" in message:    
+            #     location = "area " + message[8:]
+            #     if location in self._searched_rooms:
+            #         trustBeliefs[self._human_name]['willingness'] -= 0.10
+            #     else:
+            #         trustBeliefs[self._human_name]['willingness'] += 0.10
 
-            if "Remove" in message:
-                if "together" in message:
-                    trustBeliefs[self._human_name]['willingness'] += 0.10
-                    trustBeliefs[self._human_name]['competence'] += 0.10
-                else:
-                    if "alone" in message:
-                        trustBeliefs[self._human_name]['willingness'] -= 0.10
+            # When the human refuses to help a critically injured victim, this is interpreted as laziness from the human.
+            # Similar for mildly injured victims. In general, whenever the human doesn't collaborate with the robot in a task
+            # that could be done jointly, he receives a little penalty.
+            # if "Continue" in message:
+            #     if self._recent_vic is not None:
+            #         if "critical" in self._recent_vic:
+            #             trustBeliefs[self._human_name]['confidence'] -= 0.10
+            #             trustBeliefs[self._human_name]['willingness'] -= 0.20 * (1-trustBeliefs[self._human_name]['confidence'])
+            #         else:
+            #             trustBeliefs[self._human_name]['confidence'] -= 0.05
+            #             trustBeliefs[self._human_name]['willingness'] -= 0.10 * (1-trustBeliefs[self._human_name]['confidence'])
+                # else:
+                #     trustBeliefs[self._human_name]['confidence'] -= 0.01
+                #     trustBeliefs[self._human_name]['willingness'] -= 0.025 * (1-trustBeliefs[self._human_name]['confidence'])
 
+            # NEEDS THE DOUBLE CHECK
+            # if "Remove" in message:
+            #     if "together" in message:
+            #         trustBeliefs[self._human_name]['willingness'] += 0.10
+            #         trustBeliefs[self._human_name]['competence'] += 0.10
+            #     else:
+            #         if "alone" in message:
+            #             trustBeliefs[self._human_name]['willingness'] -= 0.10
+            
+
+        trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
         trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
         trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
-            # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
+
+        # Responsiveness: if the human makes thex robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         if self._tick > 300:
             alpha = self._tick // 100
-
             # Confidence update: the more RescueRobot waits, the more his confidence towards bad actions grows (meaning
             # the confidence value shrinks to 0)
             trustBeliefs[self._human_name]['confidence'] -= 0.05 * alpha/3
@@ -1038,6 +1085,7 @@ class BaselineAgent(ArtificialBrain):
 
             trustBeliefs[self._human_name]['willingness'] -= 0.25 * alpha/3 * (1-trustBeliefs[self._human_name]['confidence'])
             trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
+
 
         # Total score: if the team has reached a good completeness level after not much time, this is symptomatic of the competence
         # of the human (indifferently from his willingness, with his actions the task is getting done)
@@ -1072,7 +1120,9 @@ class BaselineAgent(ArtificialBrain):
             trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
-        # HERE WE HAVE UPDATE PROBLEM
+
+        # Cooperation: when human and robot work jointly, the robot can see the human has some competence for the task.
+        # So the competence value grows.
         if len(self._send_messages) > 1:
             last = self._send_messages[-1]
             second_last = self._send_messages[-2]
