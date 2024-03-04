@@ -901,6 +901,7 @@ class BaselineAgent(ArtificialBrain):
                     # Add the found victim to the to do list when the human's condition is not 'weak'
                     if 'mild' in foundVic and condition != 'weak':
                         self._todo.append(foundVic)
+
                 # If a received message involves team members rescuing victims, add these victims and their locations to memory
                 if msg.startswith('Collect:'):
                     # Identify which victim and area it concerns
@@ -916,14 +917,58 @@ class BaselineAgent(ArtificialBrain):
                     if collectVic not in self._found_victims:
                         self._found_victims.append(collectVic)
                         self._found_victim_logs[collectVic] = {'room': loc}
-                    if collectVic in self._found_victims and self._found_victim_logs[collectVic]['room'] != loc:
+
+                    wrong_room = collectVic in self._found_victims and self._found_victim_logs[collectVic]['room'] != loc
+                    if wrong_room:
+                        # If the victim was already found, but in another room, there's some inconsistency.
+                        # Having location and obj_field empty happens because of a Collect message which resulted in updating
+                        # the room and removing the rest, meaning there was some non-coherent message with the human.
+                        # Also competence is decreased, to compensate the fact that when the human says "Collect", the robot 
+                        # increases competence at first; here is compensated.
+                        self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                        self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                        self._trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                        self._trustBeliefs[self._human_name]['competence'] -= 0.08 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                        self.received_messages = []
+                        self.received_messages_content = []
+
                         self._found_victim_logs[collectVic] = {'room': loc}
+
                     # Add the victim to the memory of rescued victims when the human's condition is not weak
+                    # If the human has collected a new victim, the robot assumes the human is truthful and boosts his competence.
+                    # However the robot doesn't get more confident of its beliefs, as he has no direct experience of what he saw.
+                    # If the human lied, the robot will find it out eventually and the decrease in value will compensate this positive
+                    # update; so overall we still rely on direct experience, in some way.
                     if condition != 'weak' and collectVic not in self._collected_victims:
+                        self._trustBeliefs[self._human_name]['competence'] += 0.1 * self._trustBeliefs[self._human_name]['confidence']
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+                        self._trustBelief(self._team_members, self._trustBeliefs, self._folder, self._received_messages)
                         self._collected_victims.append(collectVic)
+                        # bug fix
+                        self.received_messages = []
+                        self.received_messages_content = []
+                    # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
+                    # either he's lied before (if not a lie, it's a blunder anyway).
+                    elif collectVic in self._collected_victims:
+                        self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                        self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                        self._trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                        self._trustBeliefs[self._human_name]['competence'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                        self.received_messages = []
+                        self.received_messages_content = []
+
                     # Decide to help the human carry the victim together when the human's condition is weak
                     if condition == 'weak':
                         self._rescue = 'together'
+                
                 # If a received message involves team members asking for help with removing obstacles, add their location to memory and come over
                 if msg.startswith('Remove:'):
                     # Come over immediately when the agent is not carrying a victim
