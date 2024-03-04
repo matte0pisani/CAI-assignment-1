@@ -990,48 +990,48 @@ class BaselineAgent(ArtificialBrain):
         # print(self._phase)
         # print(self._tick)
         # print('all victims', self._collected_victims)
-        print('found victims', self._found_victim_logs)
+        # print('found victims', self._found_victim_logs)
 
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
 
-        for message in receivedMessages:
+        # for message in receivedMessages:
 
-            # Increase agent trust in a team member that rescued a victim, if the information he provides 
-            # is coherent with the past information the robot knows about (direct experience of inconsistency).
-            if 'Collect:' in message:
-                # Identify which victim and area it concerns
-                if len(message.split()) == 6:
-                    collectVic = ' '.join(message.split()[1:4])
-                else:
-                    collectVic = ' '.join(message.split()[1:5])
-                loc = 'area ' + message.split()[-1]
-                print(collectVic, loc)
-                past_victims = self._collected_victims[:-1]
-                # print('past victims', past_victims)
-                # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
-                # either he's lied before (if not a lie, it's a blunder anyway).
-                # Known bug: if you send a Collect message concerning the last rescued victim, it counts it as
-                # a new rescued victim.
-                if collectVic in past_victims:
-                    print('caso 1')
-                    trustBeliefs[self._human_name]['confidence'] -= 0.10
-                    trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-trustBeliefs[self._human_name]['confidence'])
-                # If the victim was already found, but in another room, there's some inconsistency.
-                # Having location and obj_field empty happens because of a Collect message which resulted in updating
-                # the room and removing the rest, meaning there was some non-coherent message with the human.
-                elif collectVic in self._found_victims and 'obj_id' not in self._found_victim_logs[collectVic].keys() and 'location' not in self._found_victim_logs[collectVic].keys():
-                    print('caso 2')
-                    trustBeliefs[self._human_name]['confidence'] -= 0.10
-                    trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-trustBeliefs[self._human_name]['confidence'])
-                # Otherwise, the robot will assume the human has not been lying, and increases its trust values (especially
-                # competence). However, if it's a lie the robot will find this and the punishment will be higher than this
-                # reward. Notice how the confidence value doesn't change here.
-                else:
-                    print('caso 3')
-                    trustBeliefs[self._human_name]['competence'] += 0.2 * trustBeliefs[self._human_name]['confidence']
-                    trustBeliefs[self._human_name]['competence'] += 0.1 * trustBeliefs[self._human_name]['confidence']
+        #     # Increase agent trust in a team member that rescued a victim, if the information he provides 
+        #     # is coherent with the past information the robot knows about (direct experience of inconsistency).
+        #     if 'Collect:' in message:
+        #         # Identify which victim and area it concerns
+        #         if len(message.split()) == 6:
+        #             collectVic = ' '.join(message.split()[1:4])
+        #         else:
+        #             collectVic = ' '.join(message.split()[1:5])
+        #         loc = 'area ' + message.split()[-1]
+        #         print(collectVic, loc)
+        #         past_victims = self._collected_victims[:-1]
+        #         # print('past victims', past_victims)
+        #         # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
+        #         # either he's lied before (if not a lie, it's a blunder anyway).
+        #         # Known bug: if you send a Collect message concerning the last rescued victim, it counts it as
+        #         # a new rescued victim.
+        #         if collectVic in past_victims:
+        #             print('caso 1')
+        #             trustBeliefs[self._human_name]['confidence'] -= 0.10
+        #             trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-trustBeliefs[self._human_name]['confidence'])
+        #         # If the victim was already found, but in another room, there's some inconsistency.
+        #         # Having location and obj_field empty happens because of a Collect message which resulted in updating
+        #         # the room and removing the rest, meaning there was some non-coherent message with the human.
+        #         elif collectVic in self._found_victims and 'obj_id' not in self._found_victim_logs[collectVic].keys() and 'location' not in self._found_victim_logs[collectVic].keys():
+        #             print('caso 2')
+        #             trustBeliefs[self._human_name]['confidence'] -= 0.10
+        #             trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-trustBeliefs[self._human_name]['confidence'])
+        #         # Otherwise, the robot will assume the human has not been lying, and increases its trust values (especially
+        #         # competence). However, if it's a lie the robot will find this and the punishment will be higher than this
+        #         # reward. Notice how the confidence value doesn't change here.
+        #         else:
+        #             print('caso 3')
+        #             trustBeliefs[self._human_name]['competence'] += 0.2 * trustBeliefs[self._human_name]['confidence']
+        #             trustBeliefs[self._human_name]['competence'] += 0.1 * trustBeliefs[self._human_name]['confidence']
                
             # If the human communicates where he goes, the robot appreciates that as it help him do 
             # its job at best
@@ -1069,10 +1069,11 @@ class BaselineAgent(ArtificialBrain):
             #             trustBeliefs[self._human_name]['willingness'] -= 0.10
             
 
-        trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
+        # trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        # trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        # trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
+        print('values at beginning of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
 
         # Responsiveness: if the human makes thex robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
