@@ -652,6 +652,16 @@ class BaselineAgent(ArtificialBrain):
                                     self._send_message('Found ' + vic + ' in ' + self._door[
                                         'room_name'] + ' because you told me ' + vic + ' was located here.',
                                                       'RescueBot')
+                                    
+                                    # The human has shown both its competence and willingness to help the bot.
+                                    self._trustBeliefs[self._human_name]['confidence'] += 0.10
+                                    self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                                    self._trustBeliefs[self._human_name]['willingness'] += 0.2 * (self._trustBeliefs[self._human_name]['confidence'])
+                                    self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                                    self._trustBeliefs[self._human_name]['competence'] += 0.05 * (self._trustBeliefs[self._human_name]['confidence'])
+                                    self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
                                     # Add the area to the list with searched areas
                                     if self._door['room_name'] not in self._searched_rooms:
                                         self._searched_rooms.append(self._door['room_name'])
@@ -693,6 +703,16 @@ class BaselineAgent(ArtificialBrain):
                     self._send_message(self._goal_vic + ' not present in ' + str(self._door[
                                                                                     'room_name']) + ' because I searched the whole area without finding ' + self._goal_vic + '.',
                                       'RescueBot')
+                    # Here, the human has either lied or showed his lack of competence.
+                    self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                    self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                    self._trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                    self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                    self._trustBeliefs[self._human_name]['competence'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                    self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+
                     # Remove the victim location from memory
                     self._found_victim_logs.pop(self._goal_vic, None)
                     self._found_victims.remove(self._goal_vic)
