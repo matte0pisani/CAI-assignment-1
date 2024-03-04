@@ -615,6 +615,17 @@ class BaselineAgent(ArtificialBrain):
                             if vic not in self._room_vics:
                                 self._room_vics.append(vic)
 
+                            # Check if the victim found was already collected; in that case, it means the human has lied in the
+                            # past about collecting victims, thus willingness should decrease
+                            if vic in self._collected_victims:
+                                self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                                self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                                self._trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                                self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                                self._trustBeliefs[self._human_name]['competence'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                                self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
                             # Identify the exact location of the victim that was found by the human earlier
                             if vic in self._found_victims and 'location' not in self._found_victim_logs[vic].keys():
                                 self._recent_vic = vic
@@ -675,6 +686,7 @@ class BaselineAgent(ArtificialBrain):
                     # Reset received messages (bug fix)
                     self.received_messages = []
                     self.received_messages_content = []
+                
                 # Add the area to the list of searched areas
                 if self._door['room_name'] not in self._searched_rooms:
                     self._searched_rooms.append(self._door['room_name'])
