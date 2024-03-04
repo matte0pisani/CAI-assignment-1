@@ -15,7 +15,6 @@ from matrx.messages.message import Message
 from matrx.messages.message_manager import MessageManager
 from actions1.CustomActions import RemoveObjectTogether, CarryObjectTogether, DropObjectTogether, CarryObject, Drop
 
-
 class Phase(enum.Enum):
     INTRO = 1,
     FIND_NEXT_GOAL = 2,
@@ -69,7 +68,6 @@ def get_total_ticks_and_scores():
     completeness = action_contents[-1]['completeness']
     return no_ticks, score, completeness
 
-
 class BaselineAgent(ArtificialBrain):
     def __init__(self, slowdown, condition, name, folder):
         super().__init__(slowdown, condition, name, folder)
@@ -105,7 +103,12 @@ class BaselineAgent(ArtificialBrain):
         self._recent_vic = None
         self._received_messages = []
         self._moving = False
-        self._lie_detected = False
+        self._first_round = True
+
+        self._block_update_1 = False
+        self._block_update_2 = False
+        self._block_update_3 = False
+        self._block_update_4 = False
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -131,7 +134,11 @@ class BaselineAgent(ArtificialBrain):
         # Process messages from team members
         self._process_messages(state, self._team_members, self._condition)
         # Initialize and update trust beliefs for team members
-        trustBeliefs = self._loadBelief(self._team_members, self._folder)
+        if self._first_round:
+            trustBeliefs = self._loadBelief(self._team_members, self._folder)
+            self._first_round = False
+        else:
+            trustBeliefs = self._trustBeliefs
         self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
 
         # Increase the number of ticks each round (for now, only in case the robot is waiting, to
@@ -1073,19 +1080,20 @@ class BaselineAgent(ArtificialBrain):
         # trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
         # trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
-        print('values at beginning of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
+        # print('values at beginning of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
 
         # Responsiveness: if the human makes thex robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
-        if self._tick > 300:
-            alpha = self._tick // 100
+        if self._tick >= 200:
             # Confidence update: the more RescueRobot waits, the more his confidence towards bad actions grows (meaning
             # the confidence value shrinks to 0)
-            trustBeliefs[self._human_name]['confidence'] -= 0.05 * alpha/3
+            trustBeliefs[self._human_name]['confidence'] -= 0.05 * self._tick/100
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
 
-            trustBeliefs[self._human_name]['willingness'] -= 0.25 * alpha/3 * (1-trustBeliefs[self._human_name]['confidence'])
+            trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-trustBeliefs[self._human_name]['confidence'])
             trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
+
+            self._tick = 0
 
 
         # Total score: if the team has reached a good completeness level after not much time, this is symptomatic of the competence
@@ -1093,27 +1101,33 @@ class BaselineAgent(ArtificialBrain):
         # In particular, we consider the situation where the human does half of the work in less than 2500 ticks.
         # If in the same amount of time the human can't do a fourth of the work, then competence decreases.
         ticks, score, completeness = get_total_ticks_and_scores()
-        if float(completeness) >= 0.5 and int(ticks) < 2500:
+        if float(completeness) >= 0.5 and int(ticks) < 2500 and not self._block_update_1:
             trustBeliefs[self._human_name]['confidence'] += 0.1
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
             trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.3
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        elif float(completeness) <= 0.25 and int(ticks) >= 2500:
+            self._block_update_1 = True
+        if float(completeness) <= 0.25 and int(ticks) >= 2500 and not self._block_update_2:
             trustBeliefs[self._human_name]['confidence'] -= 0.10
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
             trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.3
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+            print('youre bad at this game!')
+            self._block_update_2 = True
 
-        if float(completeness) == 1.0 and int(ticks) < 6000:
+        if float(completeness) == 1.0 and int(ticks) < 6000 and not self._block_update_3:
             trustBeliefs[self._human_name]['confidence'] += 0.10
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
             trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.4
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        elif float(completeness) <= 0.5 and int(ticks) >= 6000:
+            self._block_update_3 = True
+        
+        if float(completeness) <= 0.5 and int(ticks) >= 6000 and not self._block_update_4:
             trustBeliefs[self._human_name]['confidence'] -= 0.10
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
             trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+            self._block_update_4 = True
 
         if float(completeness) == 1.0 and int(ticks) >= 10000:
             trustBeliefs[self._human_name]['confidence'] -= 0.10
@@ -1138,6 +1152,8 @@ class BaselineAgent(ArtificialBrain):
                 trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
+                self._send_messages = self._send_messages[:-2]
+
             # When human carries a victim with the robot, his competence increases
             if ('Lets carry' in second_last or ('carry' in second_last and 'together' in second_last) 
                 or ('because you told me' in second_last)) and Phase.FOLLOW_PATH_TO_ROOM == self._phase:
@@ -1147,17 +1163,20 @@ class BaselineAgent(ArtificialBrain):
                 trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.25
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
+                self._send_messages = self._send_messages[:-2]
+
+        # print('values at middle of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name', 'competence', 'willingness', 'confidence'])
-            print('write', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'],
+            print('values in end of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'],
                   trustBeliefs[self._human_name]['confidence'])
             csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
                                  trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'] ])
 
-        return trustBeliefs
+        self._trustBeliefs = trustBeliefs
     
     def _send_message(self, mssg, sender):
         '''
