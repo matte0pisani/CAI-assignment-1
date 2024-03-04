@@ -628,6 +628,18 @@ class BaselineAgent(ArtificialBrain):
 
                                 self._collected_victims.remove(vic)
 
+                            # Similar reasoning for found victims
+                            if vic in self._found_victims and self._found_victim_logs[vic]['room'] != self._door['room_name']:
+                                self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                                self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                                self._trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                                self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                                self._trustBeliefs[self._human_name]['competence'] -= 0.05 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                                self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                                self._found_victims.remove(vic)
+
                             # Identify the exact location of the victim that was found by the human earlier
                             if vic in self._found_victims and 'location' not in self._found_victim_logs[vic].keys():
                                 self._recent_vic = vic
