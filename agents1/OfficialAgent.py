@@ -626,6 +626,8 @@ class BaselineAgent(ArtificialBrain):
                                 self._trustBeliefs[self._human_name]['competence'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
                                 self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
 
+                                self._collected_victims.remove(vic)
+
                             # Identify the exact location of the victim that was found by the human earlier
                             if vic in self._found_victims and 'location' not in self._found_victim_logs[vic].keys():
                                 self._recent_vic = vic
@@ -890,6 +892,7 @@ class BaselineAgent(ArtificialBrain):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._searched_rooms:
                         self._searched_rooms.append(area)
+
                 # If a received message involves team members finding victims, add these victims and their locations to memory
                 if msg.startswith("Found:"):
                     # Identify which victim and area it concerns
@@ -903,10 +906,46 @@ class BaselineAgent(ArtificialBrain):
                         self._searched_rooms.append(loc)
                     # Add the victim and its location to memory
                     if foundVic not in self._found_victims:
+                        # If the robot, with the knowledge it has, thinks this is a new victim never found before, he increases
+                        # the human competence (yet not its own confidence).
+                        self._trustBeliefs[self._human_name]['competence'] += 0.1 * self._trustBeliefs[self._human_name]['confidence']
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+                        self.received_messages = []
+                        self.received_messages_content = []
+                       
                         self._found_victims.append(foundVic)
                         self._found_victim_logs[foundVic] = {'room': loc}
+                    
+                    # If the human claims he has found a victim in a room, but the robot thinks the victim is in another room,
+                    # it's either the human is lying or the human has lied before. So in any case, we penalize the human.
                     if foundVic in self._found_victims and self._found_victim_logs[foundVic]['room'] != loc:
+                        self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                        self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                        self._trustBeliefs[self._human_name]['willingness'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                        self._trustBeliefs[self._human_name]['competence'] -= 0.05 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                        self.received_messages = []
+                        self.received_messages_content = []
+
                         self._found_victim_logs[foundVic] = {'room': loc}
+
+                    # Similarly, if the human has found a victim which the robot thinks was saved before, there's some inconsistency to
+                    # punish.
+                    if foundVic in self._collected_victims:
+                        self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                        self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                        self._trustBeliefs[self._human_name]['willingness'] -= 0.3 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                        self._trustBeliefs[self._human_name]['competence'] -= 0.08 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                        self.received_messages = []
+                        self.received_messages_content = []
+
                     # Decide to help the human carry a found victim when the human's condition is 'weak'
                     if condition == 'weak':
                         self._rescue = 'together'
@@ -1062,41 +1101,7 @@ class BaselineAgent(ArtificialBrain):
 
         # for message in receivedMessages:
 
-        #     # Increase agent trust in a team member that rescued a victim, if the information he provides 
-        #     # is coherent with the past information the robot knows about (direct experience of inconsistency).
-        #     if 'Collect:' in message:
-        #         # Identify which victim and area it concerns
-        #         if len(message.split()) == 6:
-        #             collectVic = ' '.join(message.split()[1:4])
-        #         else:
-        #             collectVic = ' '.join(message.split()[1:5])
-        #         loc = 'area ' + message.split()[-1]
-        #         print(collectVic, loc)
-        #         past_victims = self._collected_victims[:-1]
-        #         # print('past victims', past_victims)
-        #         # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
-        #         # either he's lied before (if not a lie, it's a blunder anyway).
-        #         # Known bug: if you send a Collect message concerning the last rescued victim, it counts it as
-        #         # a new rescued victim.
-        #         if collectVic in past_victims:
-        #             print('caso 1')
-        #             trustBeliefs[self._human_name]['confidence'] -= 0.10
-        #             trustBeliefs[self._human_name]['willingness'] -= 0.4 * (1-trustBeliefs[self._human_name]['confidence'])
-        #         # If the victim was already found, but in another room, there's some inconsistency.
-        #         # Having location and obj_field empty happens because of a Collect message which resulted in updating
-        #         # the room and removing the rest, meaning there was some non-coherent message with the human.
-        #         elif collectVic in self._found_victims and 'obj_id' not in self._found_victim_logs[collectVic].keys() and 'location' not in self._found_victim_logs[collectVic].keys():
-        #             print('caso 2')
-        #             trustBeliefs[self._human_name]['confidence'] -= 0.10
-        #             trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-trustBeliefs[self._human_name]['confidence'])
-        #         # Otherwise, the robot will assume the human has not been lying, and increases its trust values (especially
-        #         # competence). However, if it's a lie the robot will find this and the punishment will be higher than this
-        #         # reward. Notice how the confidence value doesn't change here.
-        #         else:
-        #             print('caso 3')
-        #             trustBeliefs[self._human_name]['competence'] += 0.2 * trustBeliefs[self._human_name]['confidence']
-        #             trustBeliefs[self._human_name]['competence'] += 0.1 * trustBeliefs[self._human_name]['confidence']
-               
+        
             # If the human communicates where he goes, the robot appreciates that as it help him do 
             # its job at best
             # NEEDS THE DOUBLE CHECK
