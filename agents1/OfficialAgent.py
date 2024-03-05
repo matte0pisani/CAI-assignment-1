@@ -715,10 +715,10 @@ class BaselineAgent(ArtificialBrain):
                                     self._trustBeliefs[self._human_name]['confidence'] += 0.10
                                     self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
-                                    self._trustBeliefs[self._human_name]['willingness'] += 0.15 * (self._trustBeliefs[self._human_name]['confidence'])
+                                    self._trustBeliefs[self._human_name]['willingness'] += 0.2 * (self._trustBeliefs[self._human_name]['confidence'])
                                     self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
-                                    self._trustBeliefs[self._human_name]['competence'] += 0.05 * (self._trustBeliefs[self._human_name]['confidence'])
-                                    self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+                                    # self._trustBeliefs[self._human_name]['competence'] += 0.05 * (self._trustBeliefs[self._human_name]['confidence'])
+                                    # self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
 
                                     # Add the area to the list with searched areas
                                     if self._door['room_name'] not in self._searched_rooms:
@@ -1129,8 +1129,12 @@ class BaselineAgent(ArtificialBrain):
                             # bug fix
                             self.received_messages = []
                             self.received_messages_content = []
+
                         # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
-                        # either he's lied before (if not a lie, it's a blunder anyway).
+                        # either he's lied before (if not a lie, it's a blunder anyway). Far that reason we penalize willingness.
+                        # Moreover, we penaliza compentence to compensate the fact that the human might have been awarded more
+                        # competence when lying before (also also because the origin of the lie might be human incompentence,
+                        # potentially; in doubt we penalize both)
                         elif collectVic in self._collected_victims:
                             self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                             self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
@@ -1276,6 +1280,7 @@ class BaselineAgent(ArtificialBrain):
             trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.2
             trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
             self._block_update_1 = True
+        
         if float(completeness) <= 0.25 and int(ticks) >= 2500 and not self._block_update_2:
             trustBeliefs[self._human_name]['confidence'] -= 0.1
             trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
