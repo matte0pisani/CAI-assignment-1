@@ -81,7 +81,7 @@ def add_agents(builder, condition, task_type, name, folder):
         for agent_nr in range(nr_agents):
             if task_type=="official":
                 # modified so to be faster
-                brain = BaselineAgent(slowdown=1, condition=condition, name=name, folder=folder) # Slowdown makes the agent a bit slower, do not change value during evaluations
+                brain = BaselineAgent(slowdown=8, condition=condition, name=name, folder=folder) # Slowdown makes the agent a bit slower, do not change value during evaluations
                 loc = (22,11)
             if task_type=="tutorial":
                 brain = TutorialAgent(slowdown=8, condition=condition, name=name, folder=folder)
