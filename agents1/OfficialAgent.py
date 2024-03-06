@@ -442,7 +442,8 @@ class BaselineAgent(ArtificialBrain):
                             # Determine the next area to explore if the human tells the agent not to remove the obstacle
                         if self.received_messages_content and self.received_messages_content[
                             -1] == 'Continue' and not self._remove:
-                            # Slight penalty for non-cooperative human
+                            # Slight penalty for non-cooperative human (if on the long run, the human always tells the robot to ignore the
+                            # obstacle, it looks like he doesn't care/want to end the task)
                             self._trustBeliefs[self._human_name]['confidence'] -= 0.05
                             self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
@@ -691,7 +692,7 @@ class BaselineAgent(ArtificialBrain):
                                 self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                                 self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
-                                self._trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                                self._trustBeliefs[self._human_name]['willingness'] -= 0.15 * (1-self._trustBeliefs[self._human_name]['confidence'])
                                 self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
                                 self._trustBeliefs[self._human_name]['competence'] -= 0.05 * (1-self._trustBeliefs[self._human_name]['confidence'])
                                 self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
@@ -717,8 +718,8 @@ class BaselineAgent(ArtificialBrain):
 
                                     self._trustBeliefs[self._human_name]['willingness'] += 0.2 * (self._trustBeliefs[self._human_name]['confidence'])
                                     self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
-                                    # self._trustBeliefs[self._human_name]['competence'] += 0.05 * (self._trustBeliefs[self._human_name]['confidence'])
-                                    # self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+                                    self._trustBeliefs[self._human_name]['competence'] += 0.05 * (self._trustBeliefs[self._human_name]['confidence'])
+                                    self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
 
                                     # Add the area to the list with searched areas
                                     if self._door['room_name'] not in self._searched_rooms:
@@ -743,9 +744,9 @@ class BaselineAgent(ArtificialBrain):
                                     self._rescue = "alone"
                                     self._answered = True
                                     self._waiting = False
-                                    self._goalVic = self._recentVic
+                                    self._goalVic = self._recent_vic
                                     self._goalLoc = self._remaining[self._goalVic]
-                                    self._recentVic = None
+                                    self._recent_vic = None
                                     self._phase = Phase.PLAN_PATH_TO_VICTIM
                                     return action, {}
 
@@ -781,7 +782,7 @@ class BaselineAgent(ArtificialBrain):
                     self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                     self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
-                    self._trustBeliefs[self._human_name]['willingness'] -= 0.2 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                    self._trustBeliefs[self._human_name]['willingness'] -= 0.25 * (1-self._trustBeliefs[self._human_name]['confidence'])
                     self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
                     self._trustBeliefs[self._human_name]['competence'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
                     self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
@@ -858,7 +859,7 @@ class BaselineAgent(ArtificialBrain):
                     else:
                         self._trustBeliefs[self._human_name]['confidence'] -= 0.05
                         self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
-                        self._trustBeliefs[self._human_name]['willingness'] -= 0.1 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                        self._trustBeliefs[self._human_name]['willingness'] -= 0.05 * (1-self._trustBeliefs[self._human_name]['confidence'])
                         self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
 
                     self._answered = True
@@ -1072,6 +1073,20 @@ class BaselineAgent(ArtificialBrain):
                             self.received_messages_content = []
                             self._found_victim_logs[foundVic] = {'room': loc}
 
+                        # Similarly, if the human has found a victim which the robot thinks was saved before, there's some inconsistency to
+                        # punish.
+                        if foundVic in self._collected_victims:
+                            self._trustBeliefs[self._human_name]['confidence'] -= 0.10
+                            self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
+
+                            self._trustBeliefs[self._human_name]['willingness'] -= 0.3 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                            self._trustBeliefs[self._human_name]['willingness'] = np.clip(self._trustBeliefs[self._human_name]['willingness'], -1, 1)
+                            self._trustBeliefs[self._human_name]['competence'] -= 0.08 * (1-self._trustBeliefs[self._human_name]['confidence'])
+                            self._trustBeliefs[self._human_name]['competence'] = np.clip(self._trustBeliefs[self._human_name]['competence'], -1, 1)
+
+                            self.received_messages = []
+                            self.received_messages_content = []
+
                         # Decide to help the human carry a found victim when the human's condition is 'weak'
                         if condition == 'weak':
                             self._rescue = 'together'
@@ -1192,7 +1207,8 @@ class BaselineAgent(ArtificialBrain):
         # Create a dictionary with trust values for all team members
         trustBeliefs = {}
         # Set a default starting trust value
-        default = 0
+        default_comp = 0
+        default_will = 1
         default_conf = 0.5
         trustfile_header = []
         trustfile_contents = []
@@ -1213,8 +1229,8 @@ class BaselineAgent(ArtificialBrain):
                                           'confidence': confidence}
                 # Initialize default trust values
                 if row and row[0] != self._human_name:
-                    competence = default
-                    willingness = default
+                    competence = default_comp
+                    willingness = default_will
                     confidence = default_conf
                     trustBeliefs[self._human_name] = {'competence': competence, 'willingness': willingness, 
                                                       'confidence': confidence}
@@ -1255,7 +1271,7 @@ class BaselineAgent(ArtificialBrain):
 
         # print('values at beginning of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
 
-        # Responsiveness: if the human makes thex robot wait too much, he's either lazy or in bad faith.
+        # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         if self._tick >= 200:
             # Confidence update: the more RescueRobot waits, the more his confidence towards bad actions grows (meaning
@@ -1273,41 +1289,42 @@ class BaselineAgent(ArtificialBrain):
         # of the human (indifferently from his willingness, with his actions the task is getting done)
         # In particular, we consider the situation where the human does half of the work in less than 2500 ticks.
         # If in the same amount of time the human can't do a fourth of the work, then competence decreases.
-        ticks, score, completeness = get_total_ticks_and_scores()
-        if float(completeness) >= 0.5 and int(ticks) < 2500 and not self._block_update_1:
-            trustBeliefs[self._human_name]['confidence'] += 0.2
-            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.2
-            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-            self._block_update_1 = True
+        # BETTER TO AVOID; WE DON'T KNOW HOW MUCH OF THIS RESULT DEPENDS ON THE HUMAN!
+        # ticks, score, completeness = get_total_ticks_and_scores()
+        # if float(completeness) >= 0.5 and int(ticks) < 2500 and not self._block_update_1:
+        #     trustBeliefs[self._human_name]['confidence'] += 0.2
+        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        #     trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.2
+        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        #     self._block_update_1 = True
         
-        if float(completeness) <= 0.25 and int(ticks) >= 2500 and not self._block_update_2:
-            trustBeliefs[self._human_name]['confidence'] -= 0.1
-            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.2
-            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-            print('youre bad at this game!')
-            self._block_update_2 = True
+        # if float(completeness) <= 0.25 and int(ticks) >= 2500 and not self._block_update_2:
+        #     trustBeliefs[self._human_name]['confidence'] -= 0.1
+        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.2
+        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        #     print('youre bad at this game!')
+        #     self._block_update_2 = True
 
-        if float(completeness) == 1.0 and int(ticks) < 6000 and not self._block_update_3:
-            trustBeliefs[self._human_name]['confidence'] += 0.3
-            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-            trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.4
-            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-            self._block_update_3 = True
+        # if float(completeness) == 1.0 and int(ticks) < 6000 and not self._block_update_3:
+        #     trustBeliefs[self._human_name]['confidence'] += 0.3
+        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        #     trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.4
+        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        #     self._block_update_3 = True
         
-        if float(completeness) <= 0.5 and int(ticks) >= 6000 and not self._block_update_4:
-            trustBeliefs[self._human_name]['confidence'] -= 0.2
-            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
-            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-            self._block_update_4 = True
+        # if float(completeness) <= 0.5 and int(ticks) >= 6000 and not self._block_update_4:
+        #     trustBeliefs[self._human_name]['confidence'] -= 0.2
+        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
+        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        #     self._block_update_4 = True
 
-        if float(completeness) == 1.0 and int(ticks) >= 10000:
-            trustBeliefs[self._human_name]['confidence'] -= 0.10
-            trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-            trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
-            trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
+        # if float(completeness) == 1.0 and int(ticks) >= 10000:
+        #     trustBeliefs[self._human_name]['confidence'] -= 0.10
+        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
+        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
+        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
 
         # Cooperation: when human and robot work jointly, the robot can see the human has some competence for the task.
