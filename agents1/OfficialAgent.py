@@ -37,37 +37,6 @@ class Phase(enum.Enum):
     ENTER_ROOM = 19
 
 
-def get_total_ticks_and_scores():
-    fld = os.getcwd()
-    recent_dir = max(glob.glob(os.path.join(fld, '*/')), key=os.path.getmtime)
-    recent_dir = max(glob.glob(os.path.join(recent_dir, '*/')), key=os.path.getmtime)
-    action_file = glob.glob(os.path.join(recent_dir,'world_1/action*'))[0]
-    action_header = []
-    action_contents=[]  
-    unique_agent_actions = []
-    unique_human_actions = []
-
-    with open(action_file) as csvfile:
-        reader = csv.reader(csvfile, delimiter=';', quotechar="'")
-        for row in reader:
-            if action_header==[]:
-                action_header=row
-                continue
-            if row[2:4] not in unique_agent_actions and row[2]!="":
-                unique_agent_actions.append(row[2:4])
-            if row[4:6] not in unique_human_actions and row[4]!="":
-                unique_human_actions.append(row[4:6])
-            if row[4] == 'RemoveObjectTogether' or row[4] == 'CarryObjectTogether' or row[4] == 'DropObjectTogether':
-                if row[4:6] not in unique_agent_actions:
-                    unique_agent_actions.append(row[4:6])
-            res = {action_header[i]: row[i] for i in range(len(action_header))}
-            action_contents.append(res)
-
-    no_ticks = action_contents[-1]['tick_nr']
-    score = action_contents[-1]['score']
-    completeness = action_contents[-1]['completeness']
-    return no_ticks, score, completeness
-
 class BaselineAgent(ArtificialBrain):
     def __init__(self, slowdown, condition, name, folder):
         super().__init__(slowdown, condition, name, folder)
@@ -104,11 +73,6 @@ class BaselineAgent(ArtificialBrain):
         self._received_messages = []
         self._moving = False
         self._first_round = True
-
-        self._block_update_1 = False
-        self._block_update_2 = False
-        self._block_update_3 = False
-        self._block_update_4 = False
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -442,6 +406,7 @@ class BaselineAgent(ArtificialBrain):
                             # Determine the next area to explore if the human tells the agent not to remove the obstacle
                         if self.received_messages_content and self.received_messages_content[
                             -1] == 'Continue' and not self._remove:
+
                             # Slight penalty for non-cooperative human (if on the long run, the human always tells the robot to ignore the
                             # obstacle, it looks like he doesn't care/want to end the task)
                             self._trustBeliefs[self._human_name]['confidence'] -= 0.05
@@ -542,6 +507,7 @@ class BaselineAgent(ArtificialBrain):
                             self._phase = Phase.ENTER_ROOM
                             self._remove = False
                             return RemoveObject.__name__, {'object_id': info['obj_id']}
+                        
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting and self._distance_human == "close":
                             self._send_message('Found stones blocking  ' + str(self._door['room_name']) + '. Please decide whether to "Remove together", "Remove alone", or "Continue" searching. \n \n \
@@ -562,6 +528,7 @@ class BaselineAgent(ArtificialBrain):
                         # Determine the next area to explore if the human tells the agent not to remove the obstacle          
                         if self.received_messages_content and self.received_messages_content[
                             -1] == 'Continue' and not self._remove:
+
                             # Slight penalty for non-cooperative human
                             self._trustBeliefs[self._human_name]['confidence'] -= 0.05
                             self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
@@ -778,7 +745,8 @@ class BaselineAgent(ArtificialBrain):
                     self._send_message(self._goal_vic + ' not present in ' + str(self._door[
                                                                                     'room_name']) + ' because I searched the whole area without finding ' + self._goal_vic + '.',
                                       'RescueBot')
-                    # Here, the human has either lied or showed his lack of competence.
+                    
+                    # Here, the human has either lied or showed his lack of competence (need to compensate previous boost).
                     self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                     self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
@@ -1114,8 +1082,6 @@ class BaselineAgent(ArtificialBrain):
                         wrong_room = collectVic in self._found_victims and self._found_victim_logs[collectVic]['room'] != loc
                         if wrong_room:
                             # If the victim was already found, but in another room, there's some inconsistency.
-                            # Having location and obj_field empty happens because of a Collect message which resulted in updating
-                            # the room and removing the rest, meaning there was some non-coherent message with the human.
                             # Also competence is decreased, to compensate the fact that when the human says "Collect", the robot 
                             # increases competence at first; here is compensated.
                             self._trustBeliefs[self._human_name]['confidence'] -= 0.10
@@ -1147,7 +1113,7 @@ class BaselineAgent(ArtificialBrain):
 
                         # If the robot thinks that the victim was rescued in the past, either the human is lying now, 
                         # either he's lied before (if not a lie, it's a blunder anyway). Far that reason we penalize willingness.
-                        # Moreover, we penaliza compentence to compensate the fact that the human might have been awarded more
+                        # Moreover, we penalize compentence to compensate the fact that the human might have been awarded more
                         # competence when lying before (also also because the origin of the lie might be human incompentence,
                         # potentially; in doubt we penalize both)
                         elif collectVic in self._collected_victims:
@@ -1237,40 +1203,9 @@ class BaselineAgent(ArtificialBrain):
         return trustBeliefs
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
-        # print(self._phase)
-        # print(self._tick)
-        # print('all victims', self._collected_victims)
-        # print('found victims', self._found_victim_logs)
-
         '''
         Implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
-
-        # NOT YET IMPLEMENTED
-        # for message in receivedMessages:        
-            # If the human communicates where he goes, the robot appreciates that as it help him do 
-            # its job at best
-            # NEEDS THE DOUBLE CHECK
-            # CHECK ALSO IF REALLY NEEDED OR MAYBE TOO MUCH
-            # if "Search:" in message:    
-            #     location = "area " + message[8:]
-            #     if location in self._searched_rooms:
-            #         trustBeliefs[self._human_name]['willingness'] -= 0.10
-            #     else:
-            #         trustBeliefs[self._human_name]['willingness'] += 0.10
-
-            # NEEDS THE DOUBLE CHECK
-            # if "Remove" in message:
-            #     if "together" in message:
-            #         trustBeliefs[self._human_name]['willingness'] += 0.10
-            #         trustBeliefs[self._human_name]['competence'] += 0.10
-            #     else:
-            #         if "alone" in message:
-            #             trustBeliefs[self._human_name]['willingness'] -= 0.10
-            
-
-        # print('values at beginning of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
-
         # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         if self._tick >= 200:
@@ -1283,49 +1218,6 @@ class BaselineAgent(ArtificialBrain):
             trustBeliefs[self._human_name]['willingness'] = np.clip(trustBeliefs[self._human_name]['willingness'], -1, 1)
 
             self._tick = 0
-
-
-        # Total score: if the team has reached a good completeness level after not much time, this is symptomatic of the competence
-        # of the human (indifferently from his willingness, with his actions the task is getting done)
-        # In particular, we consider the situation where the human does half of the work in less than 2500 ticks.
-        # If in the same amount of time the human can't do a fourth of the work, then competence decreases.
-        # BETTER TO AVOID; WE DON'T KNOW HOW MUCH OF THIS RESULT DEPENDS ON THE HUMAN!
-        # ticks, score, completeness = get_total_ticks_and_scores()
-        # if float(completeness) >= 0.5 and int(ticks) < 2500 and not self._block_update_1:
-        #     trustBeliefs[self._human_name]['confidence'] += 0.2
-        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        #     trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.2
-        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        #     self._block_update_1 = True
-        
-        # if float(completeness) <= 0.25 and int(ticks) >= 2500 and not self._block_update_2:
-        #     trustBeliefs[self._human_name]['confidence'] -= 0.1
-        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.2
-        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        #     print('youre bad at this game!')
-        #     self._block_update_2 = True
-
-        # if float(completeness) == 1.0 and int(ticks) < 6000 and not self._block_update_3:
-        #     trustBeliefs[self._human_name]['confidence'] += 0.3
-        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        #     trustBeliefs[self._human_name]['competence'] += trustBeliefs[self._human_name]['confidence'] * 0.4
-        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        #     self._block_update_3 = True
-        
-        # if float(completeness) <= 0.5 and int(ticks) >= 6000 and not self._block_update_4:
-        #     trustBeliefs[self._human_name]['confidence'] -= 0.2
-        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
-        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-        #     self._block_update_4 = True
-
-        # if float(completeness) == 1.0 and int(ticks) >= 10000:
-        #     trustBeliefs[self._human_name]['confidence'] -= 0.10
-        #     trustBeliefs[self._human_name]['confidence'] = np.clip(trustBeliefs[self._human_name]['confidence'], 0, 1)
-        #     trustBeliefs[self._human_name]['competence'] -= trustBeliefs[self._human_name]['confidence'] * 0.4
-        #     trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
-
 
         # Cooperation: when human and robot work jointly, the robot can see the human has some competence for the task.
         # So the competence value grows.
@@ -1355,8 +1247,6 @@ class BaselineAgent(ArtificialBrain):
                 trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1, 1)
 
                 self._send_messages = self._send_messages[:-2]
-
-        # print('values at middle of trust', trustBeliefs[self._human_name]['competence'], trustBeliefs[self._human_name]['willingness'], trustBeliefs[self._human_name]['confidence'])
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
