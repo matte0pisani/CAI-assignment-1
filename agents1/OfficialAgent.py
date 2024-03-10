@@ -731,13 +731,14 @@ class BaselineAgent(ArtificialBrain):
                                     self._phase = Phase.FIND_NEXT_GOAL
 
                             # Identify injured victim in the area
-                            if 'healthy' not in vic and vic not in self._found_victims:
+                            if 'healthy' not in vic:
                                 self._recent_vic = vic
                                 # Add the victim and the location to the corresponding dictionary
-                                self._found_victims.append(vic)
-                                self._found_victim_logs[vic] = {'location': info['location'],
-                                                                'room': self._door['room_name'],
-                                                                'obj_id': info['obj_id']}
+                                if vic not in self._found_victims:
+                                    self._found_victims.append(vic)
+                                    self._found_victim_logs[vic] = {'location': info['location'],
+                                                                    'room': self._door['room_name'],
+                                                                    'obj_id': info['obj_id']}
                                 
                                 """
                                 If wilingness is low rescure the victim already
@@ -1283,7 +1284,7 @@ class BaselineAgent(ArtificialBrain):
         # Responsiveness: if the human makes the robot wait too much, he's either lazy or in bad faith.
         # So we decrement willingness, linearly with the time of wait
         print("TICK", self._tick)
-        if (self._tick - 1) % 99 == 0 and not self._phase == Phase.INTRO:
+        if self._tick % 125 == 124 and not self._phase == Phase.INTRO:
             # Confidence update: the more RescueRobot waits, the more his confidence towards bad actions grows (meaning
             # the confidence value shrinks to 0)
             trustBeliefs[self._human_name]['confidence'] -= 0.05
