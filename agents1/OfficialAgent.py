@@ -74,10 +74,6 @@ class BaselineAgent(ArtificialBrain):
         self._moving = False
         self._first_round = True
 
-        self._block_update_1 = False
-        self._block_update_2 = False
-        self._block_update_3 = False
-        self._block_update_4 = False
         self._baseline = "random"
 
     def initialize(self):
@@ -782,7 +778,7 @@ class BaselineAgent(ArtificialBrain):
                     self._send_message(self._goal_vic + ' not present in ' + str(self._door[
                                                                                     'room_name']) + ' because I searched the whole area without finding ' + self._goal_vic + '.',
                                       'RescueBot')
-                    # Here, the human has either lied or showed his lack of competence.
+                    # Here, the human has either lied or showed his lack of competence (need to compensate previous boost).
                     self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                     self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
