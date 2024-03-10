@@ -74,7 +74,7 @@ class BaselineAgent(ArtificialBrain):
         self._moving = False
         self._first_round = True
 
-        self._baseline = "random"
+        self._baseline = "no_trust"
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -737,15 +737,15 @@ class BaselineAgent(ArtificialBrain):
                                                                     'obj_id': info['obj_id']}
                                 
                                 """
-                                If wilingness is low rescure the victim already
+                                If wilingness is low rescue the victim already
                                 """
                                 if "mild" in vic and trustBeliefs[self._human_name]["willingness"] <= -0.6:
                                     self._send_message("Picking up "+ self._recent_vic + " in " + self._door["room_name"]+ ".", "RescueBot",)
                                     self._rescue = "alone"
                                     self._answered = True
                                     self._waiting = False
-                                    self._goalVic = self._recent_vic
-                                    self._goalLoc = self._remaining[self._goalVic]
+                                    self._goal_vic = self._recent_vic
+                                    self._goal_loc = self._remaining[self._goal_vic]
                                     self._recent_vic = None
                                     self._phase = Phase.PLAN_PATH_TO_VICTIM
                                     return action, {}
@@ -778,7 +778,7 @@ class BaselineAgent(ArtificialBrain):
                     self._send_message(self._goal_vic + ' not present in ' + str(self._door[
                                                                                     'room_name']) + ' because I searched the whole area without finding ' + self._goal_vic + '.',
                                       'RescueBot')
-                    # Here, the human has either lied or showed his lack of competence (need to compensate previous boost).
+                    # Here, the human has either lied or showed his lack of competence.
                     self._trustBeliefs[self._human_name]['confidence'] -= 0.10
                     self._trustBeliefs[self._human_name]['confidence'] = np.clip(self._trustBeliefs[self._human_name]['confidence'], 0, 1)
 
