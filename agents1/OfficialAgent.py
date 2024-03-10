@@ -226,7 +226,7 @@ class BaselineAgent(ArtificialBrain):
                     if vic in self._found_victims and vic not in self._todo:
                         self._goal_vic = vic
                         self._goal_loc = remaining[vic]
-                        trust_on_human = (self._gamble(member, trustBeliefs, 'competence') and self._gamble(member, trustBeliefs, 'willingness'))
+                        trust_on_human = (self._gamble(trustBeliefs, 'competence') and self._gamble(trustBeliefs, 'willingness'))
                         # Rescue together when victim is critical or when the human is weak and the victim is mildly injured
                         if 'critical' in vic:
                             self._rescue = 'together'
