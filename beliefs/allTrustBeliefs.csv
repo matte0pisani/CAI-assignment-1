@@ -2,6 +2,12 @@ name;competence;willingness;confidence;
 ;;;;
 
 Alice;1.0;1.0;1.0
-Alice;1.0;0.925;1.0
-Alice;1.0;0.9475;1.0
-Alice_always;1;1;1.0
+Alice;1.0;0.925;1.0
+
+Alice;1.0;0.9475;1.0
+
+Alice_always;1;1;1.0
+
+Alice-notrust;-1;-1;1.0
+
+Alice-random;0.5705751575549574;-0.2575445915537362;1.0
